@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff8ef">
+  <title>随机外卖选择转盘</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #302b35;
+      --muted: #827b87;
+      --accent: #ed7355;
+      --accent-dark: #d95f43;
+      --line: #f0e9e5;
+      --paper: #fff;
+      --canvas: #fff8ef;
+      --mint: #dff3e9;
+      --shadow: 0 18px 50px rgba(85, 59, 52, .08);
+      font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 6% 8%, rgba(255, 222, 182, .43), transparent 26rem),
+        radial-gradient(ellipse at 95% 40%, rgba(219, 243, 229, .55), transparent 28rem),
+        var(--canvas);
+    }
+
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .page { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 48px; }
+    .page-header { margin-bottom: 24px; text-align: center; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px;
+      color: #a46d50; font-size: 12px; font-weight: 800; letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before, .eyebrow::after { content: ""; width: 18px; height: 1px; background: #dfb99f; }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1.2; letter-spacing: -.04em; }
+    .subtitle { margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+
+    .app-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); gap: 22px; align-items: start; }
+    .card {
+      border: 1px solid rgba(235, 224, 217, .9); border-radius: 24px; background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .wheel-card { position: relative; overflow: hidden; padding: 24px 28px 26px; text-align: center; }
+    .wheel-card::before { position: absolute; top: -75px; left: 50%; width: 390px; height: 170px; border-radius: 50%; background: #fff8ef; content: ""; transform: translateX(-50%); }
+    .section-kicker { position: relative; margin: 0 0 12px; color: var(--muted); font-size: 13px; font-weight: 650; }
+
+    .wheel-wrap { position: relative; width: min(100%, 430px); aspect-ratio: 1; margin: 0 auto; padding: 13px; }
+    .wheel-shadow { position: absolute; inset: 13px; border-radius: 50%; background: #f3d3b8; box-shadow: 0 11px 0 #e5b999, 0 19px 25px rgba(126, 82, 57, .15); }
+    #wheel { position: relative; display: block; width: 100%; height: 100%; overflow: visible; border-radius: 50%; transform: rotate(0deg); transform-origin: 50% 50%; }
+    #wheel.is-spinning { transition: transform 5.7s cubic-bezier(.12, 0, .18, 1); }
+    .pointer {
+      position: absolute; z-index: 3; top: 3px; left: 50%; width: 31px; height: 39px;
+      transform: translateX(-50%); filter: drop-shadow(0 3px 2px rgba(101, 63, 44, .22));
+    }
+    .pointer svg { display: block; width: 100%; height: 100%; }
+
+    .result-box {
+      min-height: 80px; display: grid; place-content: center; gap: 3px; margin: 20px auto 14px;
+      padding: 11px 20px; border: 1px solid #f5e5da; border-radius: 18px; background: #fffaf5;
+    }
+    .result-caption { color: #a17e6e; font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+    .result-text { color: var(--accent-dark); font-size: clamp(21px, 3vw, 26px); font-weight: 850; line-height: 1.3; }
+    .result-text.is-empty { color: #b7adb2; font-size: 17px; font-weight: 650; }
+
+    .spin-button {
+      display: inline-flex; min-width: 210px; min-height: 54px; justify-content: center; align-items: center; gap: 10px;
+      border: 0; border-radius: 16px; color: #fff; background: var(--accent); box-shadow: 0 6px 0 #cf5c42, 0 12px 20px rgba(225, 100, 71, .2);
+      font-size: 17px; font-weight: 800; cursor: pointer; transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .spin-button:hover:not(:disabled) { background: #f07e60; transform: translateY(-2px); box-shadow: 0 8px 0 #cf5c42, 0 15px 23px rgba(225, 100, 71, .22); }
+    .spin-button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 2px 0 #cf5c42; }
+    .spin-button:disabled { cursor: wait; opacity: .75; }
+    .button-icon { font-size: 21px; }
+    .wheel-note { min-height: 20px; margin: 15px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .wheel-note.warning { color: #a76b39; }
+
+    .side-column { display: grid; gap: 18px; }
+    .options-card, .history-card { padding: 22px; }
+    .card-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 15px; }
+    .card-heading h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    .count-pill { padding: 5px 10px; border-radius: 999px; color: #8d6955; background: #fff3e8; font-size: 12px; font-weight: 750; white-space: nowrap; }
+    .add-form { display: flex; gap: 9px; margin-bottom: 12px; }
+    .add-form input {
+      min-width: 0; flex: 1; height: 43px; padding: 0 13px; border: 1px solid #e9e1de; border-radius: 12px;
+      outline: 0; color: var(--ink); background: #fff; transition: border .15s, box-shadow .15s;
+    }
+    .add-form input::placeholder { color: #b4abb0; }
+    .add-form input:focus { border-color: #e89b7e; box-shadow: 0 0 0 3px rgba(237, 115, 85, .12); }
+    .add-button { width: 45px; height: 43px; flex: 0 0 45px; border: 0; border-radius: 12px; color: #fff; background: #5eaa83; font-size: 24px; line-height: 1; cursor: pointer; transition: background .15s, transform .15s; }
+    .add-button:hover:not(:disabled) { background: #4d986f; transform: translateY(-1px); }
+    .add-button:disabled { opacity: .55; cursor: not-allowed; }
+    .form-message { min-height: 18px; margin: -4px 0 8px; color: #c65e4a; font-size: 12px; text-align: left; }
+    .options-list { max-height: 350px; overflow: auto; padding-right: 3px; scrollbar-color: #ead9ce transparent; scrollbar-width: thin; }
+    .option-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 32px; align-items: center; gap: 9px; min-height: 41px; border-bottom: 1px solid #f5f0ed; }
+    .option-number { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 9px; color: #977c6d; background: #fbf1e9; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .option-name { overflow: hidden; color: #514a53; font-size: 13px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+    .delete-button { display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 9px; color: #b7a9a5; background: transparent; font-size: 18px; cursor: pointer; }
+    .delete-button:hover:not(:disabled) { color: #d76850; background: #fff1ec; }
+    .delete-button:disabled { cursor: not-allowed; opacity: .35; }
+    .minimum-hint { margin: 11px 0 0; color: #a39aa0; font-size: 11px; text-align: left; }
+
+    .history-card { min-height: 170px; }
+    .history-empty { margin: 22px 0 8px; color: #aaa1a7; font-size: 13px; text-align: center; }
+    .history-list { display: grid; gap: 2px; }
+    .history-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f5f0ed; }
+    .history-name { overflow: hidden; color: #554e56; font-size: 13px; font-weight: 650; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+    .history-time { color: #aaa0a5; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    :focus-visible { outline: 3px solid rgba(62, 151, 112, .52); outline-offset: 3px; }
+
+    @media (max-width: 780px) {
+      .page { width: min(600px, calc(100% - 28px)); padding-top: 27px; }
+      .app-grid { grid-template-columns: 1fr; gap: 16px; }
+      .wheel-card { padding: 20px 18px 23px; }
+      .wheel-wrap { width: min(100%, 410px); }
+      .side-column { grid-template-columns: 1fr; gap: 14px; }
+      .options-list { max-height: 300px; }
+    }
+    @media (max-width: 420px) {
+      .page { width: calc(100% - 20px); padding-top: 22px; }
+      .page-header { margin-bottom: 18px; }
+      .subtitle { font-size: 13px; }
+      .wheel-card { padding: 18px 12px 20px; border-radius: 20px; }
+      .wheel-wrap { padding: 10px; }
+      .wheel-shadow { inset: 10px; box-shadow: 0 8px 0 #e5b999, 0 14px 20px rgba(126, 82, 57, .13); }
+      .pointer { top: 1px; width: 27px; height: 34px; }
+      .options-card, .history-card { padding: 18px 16px; }
+      .spin-button { width: min(100%, 250px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+      #wheel.is-spinning { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <div class="eyebrow">LUNCH DECIDER</div>
+      <h1>随机外卖选择转盘</h1>
+      <p class="subtitle">选择困难先放一边，今天吃什么交给好运气 ✨</p>
+    </header>
+
+    <div class="app-grid">
+      <section class="card wheel-card" aria-label="随机选择转盘">
+        <p class="section-kicker">准备好了吗？转一下，灵感就来啦</p>
+        <div class="wheel-wrap">
+          <div class="wheel-shadow" aria-hidden="true"></div>
+          <svg id="wheel" viewBox="0 0 400 400" role="img" aria-label="外卖候选项转盘"></svg>
+          <div class="pointer" aria-hidden="true">
+            <svg viewBox="0 0 32 42"><path d="M16 40 2.5 7.5C.8 3.4 4.1 0 8 0h16c3.9 0 7.2 3.4 5.5 7.5L16 40Z" fill="#fff"/><path d="M16 34 6.5 8.5C5.7 6.4 7.2 4.5 9.5 4.5h13c2.3 0 3.8 1.9 3 4L16 34Z" fill="#ed7355"/><circle cx="16" cy="8" r="3" fill="#ffd88e"/></svg>
+          </div>
+        </div>
+        <div class="result-box" aria-live="polite" aria-atomic="true">
+          <span class="result-caption">今日幸运美食</span>
+          <span class="result-text is-empty" id="resultText">等你来揭晓</span>
+        </div>
+        <button class="spin-button" id="spinButton" type="button">
+          <span class="button-icon" aria-hidden="true">✦</span><span id="buttonLabel">开始随机</span>
+        </button>
+        <p class="wheel-note" id="wheelNote">共 100 个候选 · 转盘显示编号，对照右侧清单查看名称</p>
+      </section>
+
+      <div class="side-column">
+        <section class="card options-card" aria-labelledby="optionsTitle">
+          <div class="card-heading">
+            <h2 id="optionsTitle">候选清单</h2>
+            <span class="count-pill" id="countPill">100 个选项</span>
+          </div>
+          <form class="add-form" id="addForm">
+            <label class="sr-only" for="newOption">添加外卖选项</label>
+            <input id="newOption" type="text" maxlength="20" placeholder="比如：寿司、煲仔饭" autocomplete="off">
+            <button class="add-button" id="addButton" type="submit" aria-label="添加选项" title="添加选项">+</button>
+          </form>
+          <p class="form-message" id="formMessage" role="status" aria-live="polite"></p>
+          <div class="options-list" id="optionsList" aria-label="外卖选项列表"></div>
+          <p class="minimum-hint">至少保留 2 个选项，点击 × 可移除不想吃的内容。候选按常见热销品类整理，实际热度会因地区和时段而异。</p>
+        </section>
+
+        <section class="card history-card" aria-labelledby="historyTitle">
+          <div class="card-heading">
+            <h2 id="historyTitle">最近选择</h2>
+            <span class="count-pill">最近 10 次</span>
+          </div>
+          <div id="historyContent"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE_OPTIONS = "takeout-wheel-options-v1";
+      const STORAGE_HISTORY = "takeout-wheel-history-v1";
+      const RECOMMENDED_MAX = 12;
+      const MIN_OPTIONS = 2;
+      const DEFAULT_OPTIONS = [
+        "黄焖鸡米饭", "麻辣烫", "奶茶", "汉堡", "兰州拉面", "家常炒菜", "炸鸡", "皮蛋瘦肉粥", "重庆小面", "盖浇饭",
+        "寿司", "饺子", "酸菜鱼", "冒菜", "螺蛳粉", "米线", "烤肉饭", "披萨", "轻食沙拉", "煲仔饭",
+        "咖喱饭", "肉夹馍", "麻辣香锅", "馄饨", "煎饼果子", "小笼包", "烤鱼", "烧腊饭", "烤冷面", "牛肉粉",
+        "炸酱面", "锅贴", "豆浆油条", "石锅拌饭", "手抓饼", "海南鸡饭", "新疆炒米粉", "酸辣粉", "卤肉饭", "饭团",
+        "铁板烧", "关东煮", "羊肉汤", "煲仔面", "潮汕粥", "烤串", "三明治", "椰子鸡", "拌面", "咖喱乌冬",
+        "黄焖鸡", "小炒肉盖饭", "鸡排饭", "蛋炒饭", "扬州炒饭", "香菇滑鸡饭", "宫保鸡丁饭", "鱼香肉丝饭", "红烧肉饭", "排骨饭",
+        "台式卤肉便当", "烤鸭饭", "烧鹅饭", "牛腩饭", "猪脚饭", "叉烧饭", "炸猪排饭", "咖喱牛肉饭", "亲子丼", "寿喜烧饭",
+        "肥牛饭", "意式肉酱面", "日式豚骨拉面", "刀削面", "热干面", "担担面", "葱油拌面", "云吞面", "炒河粉", "炒米粉",
+        "鸡汤米线", "肠粉", "生煎包", "锅包肉套餐", "毛血旺", "水煮鱼", "干锅花菜", "小火锅", "酸汤肥牛", "麻辣小龙虾",
+        "卤味拼盘", "鸭血粉丝汤", "梅菜扣肉饭", "香辣鸡腿饭", "番茄牛腩饭", "青椒肉丝饭", "小炒黄牛肉", "干锅鸡", "菌菇鸡汤饭", "鸡公煲"
+      ];
+      // 仅用于将旧版“未经编辑的默认 50 项”平滑迁移到新版；用户自行修改过的清单会原样保留。
+      const LEGACY_DEFAULT_OPTIONS = DEFAULT_OPTIONS.slice(0, 50);
+      const LEGACY_DEFAULT_OPTIONS_100 = [
+        ...DEFAULT_OPTIONS.slice(0, 92),
+        "手打柠檬茶", "水果捞", "杨枝甘露", "蛋糕甜品", "冰淇淋", "鲜榨果汁", "咖啡", "双皮奶"
+      ];
+      const COLORS = ["#f6bf78", "#ed8e71", "#e9a6a0", "#bdacd7", "#9ac9c1", "#b9d88e", "#f0d37d", "#f2a879", "#a9c4df", "#d8a8c4"];
+
+      const wheel = document.getElementById("wheel");
+      const spinButton = document.getElementById("spinButton");
+      const buttonLabel = document.getElementById("buttonLabel");
+      const resultText = document.getElementById("resultText");
+      const wheelNote = document.getElementById("wheelNote");
+      const optionsList = document.getElementById("optionsList");
+      const countPill = document.getElementById("countPill");
+      const historyContent = document.getElementById("historyContent");
+      const addForm = document.getElementById("addForm");
+      const newOptionInput = document.getElementById("newOption");
+      const addButton = document.getElementById("addButton");
+      const formMessage = document.getElementById("formMessage");
+
+      let options = loadOptions();
+      let history = loadHistory();
+      let currentRotation = 0;
+      let isSpinning = false;
+      let spinFallbackTimer = null;
+      let spinTargetIndex = 0;
+
+      function loadOptions() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_OPTIONS));
+          if (Array.isArray(saved)) {
+            const clean = [...new Set(saved.filter(item => typeof item === "string").map(item => item.trim()).filter(Boolean))];
+            if (clean.length >= MIN_OPTIONS) {
+              const startsWithPrevious100Defaults = clean.length >= LEGACY_DEFAULT_OPTIONS_100.length &&
+                LEGACY_DEFAULT_OPTIONS_100.every((item, index) => clean[index] === item);
+              if (startsWithPrevious100Defaults) {
+                const migrated = [...DEFAULT_OPTIONS, ...clean.slice(LEGACY_DEFAULT_OPTIONS_100.length).filter(item => !DEFAULT_OPTIONS.includes(item))];
+                persist(STORAGE_OPTIONS, migrated);
+                return migrated;
+              }
+              const startsWithLegacyDefaults = clean.length >= LEGACY_DEFAULT_OPTIONS.length &&
+                LEGACY_DEFAULT_OPTIONS.every((item, index) => clean[index] === item);
+              if (startsWithLegacyDefaults) {
+                const migrated = [...clean, ...DEFAULT_OPTIONS.slice(LEGACY_DEFAULT_OPTIONS.length).filter(item => !clean.includes(item))];
+                persist(STORAGE_OPTIONS, migrated);
+                return migrated;
+              }
+              return clean;
+            }
+          }
+        } catch (_) { /* 存储不可用或内容损坏时使用默认候选 */ }
+        return [...DEFAULT_OPTIONS];
+      }
+
+      function loadHistory() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_HISTORY));
+          if (Array.isArray(saved)) {
+            return saved.filter(item => item && typeof item.name === "string" && typeof item.time === "string").slice(0, 10);
+          }
+        } catch (_) { /* 忽略无效历史，应用仍可正常使用 */ }
+        return [];
+      }
+
+      function persist(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function polarPoint(angle, radius) {
+        const radians = angle * Math.PI / 180;
+        return { x: 200 + Math.cos(radians) * radius, y: 200 + Math.sin(radians) * radius };
+      }
+
+      function addSvgElement(name, attributes = {}) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+        return element;
+      }
+
+      function renderWheel() {
+        wheel.replaceChildren();
+        const size = options.length;
+        const step = 360 / size;
+        const showNames = size <= RECOMMENDED_MAX;
+
+        options.forEach((name, index) => {
+          const startAngle = -90 + index * step;
+          const endAngle = startAngle + step;
+          const start = polarPoint(startAngle, 190);
+          const end = polarPoint(endAngle, 190);
+          const path = addSvgElement("path", {
+            d: `M 200 200 L ${start.x.toFixed(3)} ${start.y.toFixed(3)} A 190 190 0 ${step > 180 ? 1 : 0} 1 ${end.x.toFixed(3)} ${end.y.toFixed(3)} Z`,
+            fill: COLORS[index % COLORS.length],
+            stroke: "#fffaf5",
+            "stroke-width": 2
+          });
+          wheel.append(path);
+
+          const middleAngle = startAngle + step / 2;
+          const labelPoint = polarPoint(middleAngle, showNames ? 126 : 142);
+          let rotation = middleAngle + 90;
+          if (middleAngle > 0 && middleAngle < 180) rotation += 180;
+          const label = addSvgElement("text", {
+            x: labelPoint.x.toFixed(2), y: labelPoint.y.toFixed(2),
+            transform: `rotate(${rotation.toFixed(2)} ${labelPoint.x.toFixed(2)} ${labelPoint.y.toFixed(2)})`,
+            "text-anchor": "middle", "dominant-baseline": "central",
+            fill: "#433a40", "font-size": showNames ? (size <= 8 ? 12 : 10) : 9,
+            "font-weight": 800, "paint-order": "stroke", stroke: "rgba(255,255,255,.62)", "stroke-width": 2, "stroke-linejoin": "round"
+          });
+          // 选项较多时显示序号，序号与右侧清单一一对应，避免名称挤在窄扇区内。
+          label.textContent = showNames ? abbreviate(name, size <= 8 ? 5 : 4) : String(index + 1).padStart(2, "0");
+          wheel.append(label);
+        });
+
+        wheel.append(addSvgElement("circle", { cx: 200, cy: 200, r: 42, fill: "#fffaf4", stroke: "#fff", "stroke-width": 4 }));
+        const hub = addSvgElement("text", { x: 200, y: 197, "text-anchor": "middle", "dominant-baseline": "central", fill: "#c16b50", "font-size": 12, "font-weight": 900, "letter-spacing": 1 });
+        hub.textContent = "吃什么";
+        wheel.append(hub);
+        const sparkle = addSvgElement("text", { x: 200, y: 216, "text-anchor": "middle", "dominant-baseline": "central", fill: "#e6aa62", "font-size": 12 });
+        sparkle.textContent = "✦  ✦  ✦";
+        wheel.append(sparkle);
+
+        countPill.textContent = `${size} 个选项`;
+        wheelNote.textContent = size > RECOMMENDED_MAX
+          ? `共 ${size} 个候选 · 转盘显示编号，对照右侧清单查看名称；建议控制在 ${RECOMMENDED_MAX} 个以内，更容易看清。`
+          : `共 ${size} 个候选 · 指针停在哪里，今天就吃什么`;
+        wheelNote.classList.toggle("warning", size > RECOMMENDED_MAX);
+        renderOptions();
+      }
+
+      function abbreviate(name, maxLength) {
+        const chars = Array.from(name);
+        return chars.length > maxLength ? `${chars.slice(0, maxLength - 1).join("")}…` : name;
+      }
+
+      function renderOptions() {
+        optionsList.replaceChildren();
+        options.forEach((name, index) => {
+          const row = document.createElement("div");
+          row.className = "option-row";
+          const number = document.createElement("span");
+          number.className = "option-number";
+          number.textContent = String(index + 1).padStart(2, "0");
+          const label = document.createElement("span");
+          label.className = "option-name";
+          label.textContent = name;
+          label.title = name;
+          const remove = document.createElement("button");
+          remove.className = "delete-button";
+          remove.type = "button";
+          remove.textContent = "×";
+          remove.setAttribute("aria-label", `删除 ${name}`);
+          remove.title = options.length <= MIN_OPTIONS ? "至少保留 2 个选项" : `删除 ${name}`;
+          remove.disabled = isSpinning || options.length <= MIN_OPTIONS;
+          remove.addEventListener("click", () => deleteOption(index));
+          row.append(number, label, remove);
+          optionsList.append(row);
+        });
+      }
+
+      function formatTime(isoTime) {
+        const date = new Date(isoTime);
+        if (Number.isNaN(date.getTime())) return "时间未知";
+        return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+      }
+
+      function renderHistory() {
+        historyContent.replaceChildren();
+        if (!history.length) {
+          const empty = document.createElement("p");
+          empty.className = "history-empty";
+          empty.textContent = "转盘还没开始，第一条记录等你来写 ✨";
+          historyContent.append(empty);
+          return;
+        }
+        const list = document.createElement("div");
+        list.className = "history-list";
+        history.forEach(entry => {
+          const row = document.createElement("div");
+          row.className = "history-row";
+          const name = document.createElement("span");
+          name.className = "history-name";
+          name.textContent = `今天吃：${entry.name}`;
+          const time = document.createElement("time");
+          time.className = "history-time";
+          time.dateTime = entry.time;
+          time.textContent = formatTime(entry.time);
+          row.append(name, time);
+          list.append(row);
+        });
+        historyContent.append(list);
+      }
+
+      function setBusy(busy) {
+        isSpinning = busy;
+        spinButton.disabled = busy;
+        buttonLabel.textContent = busy ? "好运正在路上…" : "开始随机";
+        newOptionInput.disabled = busy;
+        addButton.disabled = busy;
+        renderOptions();
+      }
+
+      function spin() {
+        if (isSpinning || options.length < MIN_OPTIONS) return;
+        setBusy(true);
+        resultText.classList.add("is-empty");
+        resultText.textContent = "好运正在路上…";
+
+        const selectedIndex = Math.floor(Math.random() * options.length);
+        spinTargetIndex = selectedIndex;
+        const step = 360 / options.length;
+        const targetWithinTurn = (360 - ((selectedIndex + 0.5) * step % 360)) % 360;
+        const currentWithinTurn = ((currentRotation % 360) + 360) % 360;
+        let alignment = targetWithinTurn - currentWithinTurn;
+        if (alignment < 0) alignment += 360;
+        const destination = currentRotation + 360 * 6 + alignment;
+        wheel.classList.add("is-spinning");
+        wheel.style.transform = `rotate(${destination}deg)`;
+        currentRotation = destination;
+        // transitionend 让结果在动画刚结束时出现；定时器作为浏览器事件未触发时的兜底。
+        spinFallbackTimer = window.setTimeout(finishSpin, 6200);
+      }
+
+      function finishSpin() {
+        if (!isSpinning) return;
+        if (spinFallbackTimer !== null) window.clearTimeout(spinFallbackTimer);
+        spinFallbackTimer = null;
+        wheel.classList.remove("is-spinning");
+        const selectedIndex = spinTargetIndex;
+        const selected = options[selectedIndex];
+        resultText.textContent = `今天吃：${selected}`;
+        resultText.classList.remove("is-empty");
+        history.unshift({ name: selected, time: new Date().toISOString() });
+        history = history.slice(0, 10);
+        persist(STORAGE_HISTORY, history);
+        renderHistory();
+        setBusy(false);
+      }
+
+      function deleteOption(index) {
+        if (isSpinning || options.length <= MIN_OPTIONS) return;
+        options.splice(index, 1);
+        persist(STORAGE_OPTIONS, options);
+        formMessage.textContent = "";
+        renderWheel();
+      }
+
+      addForm.addEventListener("submit", event => {
+        event.preventDefault();
+        if (isSpinning) return;
+        const value = newOptionInput.value.trim();
+        if (!value) {
+          formMessage.textContent = "先写下想吃的外卖名称吧。";
+          newOptionInput.focus();
+          return;
+        }
+        if (options.some(item => item.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+          formMessage.textContent = "这个选项已经在清单里啦。";
+          newOptionInput.focus();
+          return;
+        }
+        options.push(value);
+        persist(STORAGE_OPTIONS, options);
+        newOptionInput.value = "";
+        formMessage.textContent = "已加入候选清单。";
+        renderWheel();
+        newOptionInput.focus();
+      });
+
+      newOptionInput.addEventListener("input", () => { formMessage.textContent = ""; });
+      spinButton.addEventListener("click", spin);
+      wheel.addEventListener("transitionend", event => {
+        if (event.target === wheel && event.propertyName === "transform") finishSpin();
+      });
+
+      renderWheel();
+      renderHistory();
+    })();
+  </script>
+</body>
+</html>
+
